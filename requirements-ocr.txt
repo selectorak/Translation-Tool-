@@ -1,0 +1,9 @@
+# ====== 屏幕翻译依赖（OCR + 截图） ======
+# 安装：pip install -r requirements-ocr.txt
+# 另需系统程序 Tesseract-OCR（python check_deps.py 可诊断）
+
+opencv-python>=4.8.0
+pytesseract>=0.3.10
+mss>=9.0.1
+Pillow>=10.0.0
+numpy>=1.24.0

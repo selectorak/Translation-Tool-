@@ -1,0 +1,33 @@
+{
+  "selected_engine": "",
+  "fallback_enabled": "",
+  "api_keys": {
+    "baidu": {
+      "app_id": "",
+      "secret_key": ""
+    },
+    "tencent": {
+      "secret_id": "",
+      "secret_key": "",
+      "region": ""
+    },
+    "alibaba": {
+      "access_key_id": "",
+      "access_key_secret": ""
+    },
+    "youdao": {
+      "app_key": "",
+      "app_secret": ""
+    },
+    "xunfei": {
+      "app_id": "",
+      "api_key": "",
+      "api_secret": ""
+    },
+    "microsoft": {
+      "subscription_key": "",
+      "region": ""
+    }
+  },
+  "max_chunk_size": ""
+}

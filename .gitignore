@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+
+# API Keys (敏感信息)
+api_keys.json
+
+# 翻译结果缓存
+.translation_cache/
+
+# 打包产物目录（含 exe/zip）
+dist-for-github/
+
+# 虚拟环境
+venv/
+.venv/
+env/
+
+# 测试音频文件（大文件）
+*.wav
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store

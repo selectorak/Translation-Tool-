@@ -666,31 +666,38 @@ python translator.py
 ### 依赖安装
 
 ```bash
-# ====== 一键安装所有依赖（推荐） ======
+# ====== 基础依赖（必装：剪贴板翻译 + 在线翻译引擎） ======
 pip install -r requirements.txt
 
-# ====== 或按需手动安装 ======
+# ====== 可选功能依赖（按需安装） ======
 
-# 基础依赖（必装）
-pip install pyperclip requests
+# 屏幕翻译（OpenCV + OCR + 截图）
+pip install -r requirements-ocr.txt
 
-# 屏幕翻译依赖（可选，使用 OpenCV + OCR 功能时需要）
-pip install opencv-python pytesseract mss Pillow numpy
+# 音频翻译（录音 + faster-whisper 本地识别）
+pip install -r requirements-audio.txt
 
-# ★ 还需要安装 Tesseract-OCR 系统程序：
+# 语音朗读（TTS）
+pip install -r requirements-tts.txt
+
+# ★ 屏幕翻译还需要安装 Tesseract-OCR 系统程序：
 #   https://github.com/UB-Mannheim/tesseract/wiki
 #   下载 tesseract-ocr-w64-setup-5.x.x.exe
 #   安装时勾选中文语言包 (Chinese Simplified)
-#   支持自定义路径（自动检测常见目录，包括 D:\tesseract）
-
-# 音频翻译依赖（可选）
-pip install faster-whisper pycaw comtypes numpy
+#   支持自定义路径（自动检测 PATH、注册表及常见安装目录）
 
 # ★ GPU 加速（可选，RTX 显卡推荐）：
 #   安装 nvidia-cublas-cu12 获取 cublas64_12.dll
 pip install nvidia-cublas-cu12
 #   将 DLL 复制到 ctranslate2 目录：
 #   copy site-packages\nvidia\cublas\bin\cublas64_12.dll site-packages\ctranslate2\
+```
+
+### API 密钥配置
+
+```bash
+# 首次使用时复制模板并填写各引擎密钥（该文件已被 .gitignore 排除）
+copy api_keys.example.json api_keys.json
 ```
 
 ### 依赖诊断

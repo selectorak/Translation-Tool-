@@ -1,0 +1,5 @@
+# ====== 语音朗读依赖（可选） ======
+# 安装：pip install -r requirements-tts.txt
+
+pyttsx3>=2.90
+# pywin32>=306  # 备选 TTS 引擎
