@@ -250,8 +250,9 @@ class TranslatorApp:
                                    width=14, font=("Microsoft YaHei", 10))
         src_lang_cb.pack(side=tk.LEFT, padx=(0, 4), pady=8)
 
-        # 语言名称映射
-        self.lang_names = {"auto": "🔍 自动检测", "zh": "🇨🇳 中文", "en": "🇺🇸 英文"}
+        # 语言名称映射（源/目标各一套：auto 的语义不同）
+        self.SRC_LANG_LABELS = {"auto": "🔍 自动检测", "zh": "🇨🇳 中文", "en": "🇺🇸 英文"}
+        self.TGT_LANG_LABELS = {"auto": "🔍 自动选择", "zh": "🇨🇳 中文", "en": "🇺🇸 英文"}
         src_lang_cb["values"] = ["🔍 自动检测", "🇨🇳 中文", "🇺🇸 英文"]
 
         # 交换按钮
@@ -270,9 +271,9 @@ class TranslatorApp:
         tk.Label(tgt_frame, text="目标语言:", font=("Microsoft YaHei", 10),
                 bg=Theme.CARD_BG, fg=Theme.TEXT_SEC).pack(side=tk.LEFT, padx=(10, 4), pady=8)
 
-        self.tgt_lang_var = tk.StringVar(value="zh")
+        self.tgt_lang_var = tk.StringVar(value="auto")
         tgt_lang_cb = ttk.Combobox(tgt_frame, textvariable=self.tgt_lang_var,
-                                   values=["🇨🇳 中文", "🇺🇸 英文"], state="readonly",
+                                   values=["🔍 自动选择", "🇨🇳 中文", "🇺🇸 英文"], state="readonly",
                                    width=14, font=("Microsoft YaHei", 10))
         tgt_lang_cb.pack(side=tk.LEFT, padx=(0, 4), pady=8)
 
@@ -580,8 +581,8 @@ class TranslatorApp:
         # 显示时截断预览（浮窗空间有限，但完整翻译）
         preview = text[:CLIPBOARD_PREVIEW_CHARS] + ("..." if len(text) > CLIPBOARD_PREVIEW_CHARS else "")
 
-        from_lang = self._get_src_lang_code()
-        to_lang = self._get_tgt_lang_code()
+        # 解析语言对（目标 auto 时自动互译）
+        from_lang, to_lang = self._resolve_lang_pair(text)
 
         # 显示加载状态（用预览文本）
         self.float_popup.show_loading(preview)
@@ -657,8 +658,8 @@ class TranslatorApp:
         if not text or len(text) < 2:
             return
 
-        from_lang = self._get_src_lang_code()
-        to_lang = self._get_tgt_lang_code()
+        # 解析语言对（目标 auto 时自动互译）
+        from_lang, to_lang = self._resolve_lang_pair(text)
 
         # 在输出区显示加载状态
         self._set_output_text("⏳ 正在翻译选中文字...")
@@ -695,8 +696,8 @@ class TranslatorApp:
             self.status_label.configure(text="⚠️ 请先输入要翻译的文字")
             return
 
-        from_lang = self._get_src_lang_code()
-        to_lang = self._get_tgt_lang_code()
+        # 解析语言对（目标 auto 时自动互译）
+        from_lang, to_lang = self._resolve_lang_pair(text)
 
         self._set_output_text("⏳ 正在翻译，请稍候...")
         self.status_label.configure(text="🔄 整体翻译中...")
@@ -777,8 +778,22 @@ class TranslatorApp:
     def _get_tgt_lang_code(self):
         """获取目标语言代码"""
         val = self.tgt_lang_var.get()
-        mapping = {"🇨🇳 中文": "zh", "🇺🇸 英文": "en"}
-        return mapping.get(val, "zh")
+        mapping = {"🔍 自动选择": "auto", "🇨🇳 中文": "zh", "🇺🇸 英文": "en"}
+        return mapping.get(val, "auto")
+
+    def _resolve_lang_pair(self, text):
+        """解析源/目标语言对。
+
+        目标为 auto 时按源语言自动互译（仅中英：中→英、英/其他→中）；
+        源为 auto 且目标为 auto 时先检测源语言再定方向。
+        """
+        from_lang = self._get_src_lang_code()
+        to_lang = self._get_tgt_lang_code()
+        if to_lang == "auto":
+            if from_lang == "auto":
+                from_lang = TranslateEngine.detect_lang(text)
+            to_lang = "en" if from_lang == "zh" else "zh"
+        return from_lang, to_lang
 
     def _on_input_modified(self, event=None):
         """输入框内容变化"""
@@ -837,7 +852,11 @@ class TranslatorApp:
         text = self.output_text.get("1.0", tk.END).strip()
         if not text or text.startswith("⏳") or text.startswith("❌"):
             return
-        self._speak(text, self._get_tgt_lang_code())
+        tgt = self._get_tgt_lang_code()
+        if tgt == "auto":
+            # 目标自动：按译文内容检测语言选声音
+            tgt = TranslateEngine.detect_lang(text)
+        self._speak(text, tgt)
 
     def _speak(self, text, lang):
         """TTS 语音朗读（后台线程执行，避免 SAPI 阻塞主线程 UI）"""
@@ -1004,10 +1023,9 @@ class TranslatorApp:
         new_src = tgt_val
         new_tgt = src_val if src_val != "auto" else TranslateEngine.detect_lang(text)
 
-        # 更新UI
-        lang_labels = {"zh": "🇨🇳 中文", "en": "🇺🇸 英文", "auto": "🔍 自动检测"}
-        self.src_lang_var.set(lang_labels.get(new_src, "🔍 自动检测"))
-        self.tgt_lang_var.set(lang_labels.get(new_tgt, "🇨🇳 中文"))
+        # 更新UI（源/目标各用各的标签：auto 在目标侧是"自动选择"）
+        self.src_lang_var.set(self.SRC_LANG_LABELS.get(new_src, "🔍 自动检测"))
+        self.tgt_lang_var.set(self.TGT_LANG_LABELS.get(new_tgt, "🔍 自动选择"))
 
         # 把翻译结果放入输入框
         self._fill_input_text(text)
@@ -1016,17 +1034,12 @@ class TranslatorApp:
         self._do_full_translate()
 
     def _swap_languages(self):
-        """交换源语言和目标语言"""
+        """交换源语言和目标语言（auto 原样换边）"""
         src_val = self._get_src_lang_code()
         tgt_val = self._get_tgt_lang_code()
 
-        lang_labels = {"zh": "🇨🇳 中文", "en": "🇺🇸 英文", "auto": "🔍 自动检测"}
-        if src_val == "auto":
-            self.src_lang_var.set(lang_labels.get(tgt_val, "🇨🇳 中文"))
-            self.tgt_lang_var.set("🔍 自动检测")
-        else:
-            self.src_lang_var.set(lang_labels.get(tgt_val, "🇨🇳 中文"))
-            self.tgt_lang_var.set(lang_labels.get(src_val, "🇺🇸 英文"))
+        self.src_lang_var.set(self.SRC_LANG_LABELS.get(tgt_val, "🔍 自动检测"))
+        self.tgt_lang_var.set(self.TGT_LANG_LABELS.get(src_val, "🔍 自动选择"))
 
     def _toggle_monitoring(self):
         """切换剪贴板监控（常驻线程 + Event 暂停/恢复，无线程叠加）"""
