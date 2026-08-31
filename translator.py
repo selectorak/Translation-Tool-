@@ -133,7 +133,7 @@ class TranslatorApp:
         self.root = tk.Tk()
         self.root.title(APP_TITLE)
         self.root.geometry(f"{MAIN_WIN_WIDTH}x{MAIN_WIN_HEIGHT}")
-        self.root.minsize(560, 480)
+        self.root.minsize(760, 560)
         self.root.configure(bg=Theme.BG)
 
         # 设置图标（如果有的话）
@@ -150,11 +150,12 @@ class TranslatorApp:
         # 状态变量
         self.last_clipboard_text = ""     # 上次剪贴板内容
         self.current_translation = ""     # 当前翻译结果
-        self.monitoring = True            # 剪贴板监控开关
+        # 默认关闭，避免普通复制/粘贴时意外触发翻译；由用户显式开启。
+        self.monitoring = False           # 粘贴自动翻译开关
         self.selected_translate_enabled = True  # 划词翻译开关
         self._closing = False             # 窗口关闭防重入标志
         self._monitor_event = threading.Event()  # 监控暂停/恢复（set=监控中）
-        self._monitor_event.set()
+        self._monitor_event.clear()
         self.clipboard_thread = None      # 常驻监控线程
         self._translate_seq = 0           # 翻译任务序号（过期结果丢弃，防乱序覆盖）
 
@@ -201,22 +202,34 @@ class TranslatorApp:
 
     def _build_ui(self):
         """构建主界面"""
+        self._configure_ttk_style()
         # ---- 顶部导航栏 ----
-        nav = tk.Frame(self.root, bg=Theme.CARD_BG, height=48,
+        nav = tk.Frame(self.root, bg=Theme.CARD_BG, height=66,
                       highlightbackground=Theme.BORDER, highlightthickness=1)
         nav.pack(fill=tk.X)
         nav.pack_propagate(False)
 
-        title_lbl = tk.Label(nav, text="🌐 中英翻译助手",
-                            font=("Microsoft YaHei", 13, "bold"),
+        title_lbl = tk.Label(nav, text="译界  ·  中英翻译助手",
+                            font=("Microsoft YaHei UI", 16, "bold"),
                             bg=Theme.CARD_BG, fg=Theme.PRIMARY)
-        title_lbl.pack(side=tk.LEFT, padx=16, pady=10)
+        title_lbl.pack(side=tk.LEFT, padx=(22, 8), pady=16)
+
+        tk.Label(nav, text="让文字跨越语言边界",
+                 font=("Microsoft YaHei UI", 9), bg=Theme.CARD_BG,
+                 fg=Theme.TEXT_HINT).pack(side=tk.LEFT, pady=(22, 16))
 
         # 监控状态指示
-        self.monitor_indicator = tk.Label(nav, text="🟢 剪贴板监控中",
-                                         font=("Microsoft YaHei", 9),
-                                         bg=Theme.CARD_BG, fg=Theme.SUCCESS)
-        self.monitor_indicator.pack(side=tk.RIGHT, padx=12, pady=12)
+        self.monitor_indicator = tk.Label(nav, text="粘贴翻译已关闭",
+                                         font=("Microsoft YaHei UI", 9),
+                                         bg=Theme.CARD_BG, fg=Theme.TEXT_HINT)
+        self.monitor_indicator.pack(side=tk.RIGHT, padx=(8, 18), pady=16)
+
+        self.monitor_toggle_btn = tk.Label(
+            nav, text="○  粘贴自动翻译", font=("Microsoft YaHei UI", 9, "bold"),
+            bg=Theme.BG, fg=Theme.TEXT_SEC, cursor="hand2", padx=12, pady=7,
+            highlightbackground=Theme.BORDER, highlightthickness=1)
+        self.monitor_toggle_btn.pack(side=tk.RIGHT, padx=5, pady=14)
+        self.monitor_toggle_btn.bind("<Button-1>", lambda e: self._toggle_monitoring())
 
         # 置顶按钮
         self.topmost_btn = tk.Label(nav, text="📌 置顶", font=("Microsoft YaHei", 9),
@@ -234,7 +247,7 @@ class TranslatorApp:
 
         # ---- 语言选择栏 ----
         lang_bar = tk.Frame(self.root, bg=Theme.BG, height=50)
-        lang_bar.pack(fill=tk.X, padx=16, pady=(12, 0))
+        lang_bar.pack(fill=tk.X, padx=22, pady=(16, 0))
         lang_bar.pack_propagate(False)
 
         lang_frame = tk.Frame(lang_bar, bg=Theme.CARD_BG,
@@ -304,8 +317,15 @@ class TranslatorApp:
         settings_btn.bind("<Enter>", lambda e: settings_btn.configure(bg=Theme.get("PRIMARY_BG"), fg=Theme.get("PRIMARY")))
         settings_btn.bind("<Leave>", lambda e: settings_btn.configure(bg=Theme.get("CARD_BG"), fg=Theme.get("TEXT_SEC")))
 
+        # ---- 快捷操作栏（与语言设置分行，窄屏下也不会互相挤压） ----
+        action_bar = tk.Frame(self.root, bg=Theme.BG, height=48)
+        action_bar.pack(fill=tk.X, padx=22, pady=(8, 0))
+        action_bar.pack_propagate(False)
+        tk.Label(action_bar, text="快捷操作", font=("Microsoft YaHei UI", 9, "bold"),
+                 bg=Theme.BG, fg=Theme.TEXT_HINT).pack(side=tk.LEFT, pady=10)
+
         # 音频翻译按钮
-        self.audio_translate_btn = tk.Label(lang_bar, text="  🎙 音频翻译  ",
+        self.audio_translate_btn = tk.Label(action_bar, text="  🎙 音频翻译  ",
                                            font=("Microsoft YaHei", 11, "bold"),
                                            bg="#ea4335", fg="#ffffff",
                                            cursor="hand2", padx=14, pady=8)
@@ -315,7 +335,7 @@ class TranslatorApp:
         self.audio_translate_btn.bind("<Leave>", lambda e: self.audio_translate_btn.configure(bg="#ea4335"))
 
         # 屏幕翻译按钮
-        self.screen_translate_btn = tk.Label(lang_bar, text="  🖥 屏幕翻译  ",
+        self.screen_translate_btn = tk.Label(action_bar, text="  🖥 屏幕翻译  ",
                                             font=("Microsoft YaHei", 11, "bold"),
                                             bg=Theme.SUCCESS, fg="#ffffff",
                                             cursor="hand2", padx=14, pady=8)
@@ -325,7 +345,7 @@ class TranslatorApp:
         self.screen_translate_btn.bind("<Leave>", lambda e: self.screen_translate_btn.configure(bg=Theme.SUCCESS))
 
         # 整体翻译按钮
-        self.translate_btn = tk.Label(lang_bar, text="  📝 整体翻译  ",
+        self.translate_btn = tk.Label(action_bar, text="  📝 整体翻译  ",
                                      font=("Microsoft YaHei", 11, "bold"),
                                      bg=Theme.PRIMARY, fg="#ffffff",
                                      cursor="hand2", padx=18, pady=8)
@@ -336,7 +356,7 @@ class TranslatorApp:
 
         # ---- 主面板（输入 + 输出，grid 布局强制等分） ----
         main_panel = tk.Frame(self.root, bg=Theme.BG)
-        main_panel.pack(fill=tk.BOTH, expand=True, padx=16, pady=10)
+        main_panel.pack(fill=tk.BOTH, expand=True, padx=22, pady=14)
         main_panel.grid_rowconfigure(0, weight=1, uniform="panel")
         main_panel.grid_rowconfigure(1, weight=1, uniform="panel")
         main_panel.grid_columnconfigure(0, weight=1)
@@ -378,7 +398,7 @@ class TranslatorApp:
         input_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
         # 输入框占位符
-        self._add_placeholder(self.input_text, "在此输入要翻译的文字...\n\n💡 提示：\n  • 鼠标选中文字 → 自动区域翻译\n  • Ctrl+Enter → 整体翻译\n  • Ctrl+Shift+S → 屏幕区域翻译\n  • Ctrl+Shift+A → 音频翻译\n  • 在其他软件 Ctrl+C → 自动弹出翻译")
+        self._add_placeholder(self.input_text, "在此输入或粘贴需要翻译的内容…\n\n快捷方式\n  Ctrl + Enter  开始翻译\n  Ctrl + Shift + S  屏幕取词\n  Ctrl + Shift + A  音频翻译\n\n需要复制后自动翻译时，请开启顶部的「粘贴自动翻译」。")
 
         # 输入框底部按钮
         input_actions = tk.Frame(input_frame, bg=Theme.CARD_BG, height=34)
@@ -436,21 +456,13 @@ class TranslatorApp:
 
         # ---- 底部状态栏 ----
         status_bar = tk.Frame(self.root, bg=Theme.BG, height=30)
-        status_bar.pack(fill=tk.X, padx=16, pady=(0, 8))
+        status_bar.pack(fill=tk.X, padx=22, pady=(0, 12))
         status_bar.pack_propagate(False)
 
-        self.status_label = tk.Label(status_bar, text="✅ 就绪 | Ctrl+C 跨软件 | Ctrl+Shift+S 屏幕 | Ctrl+Shift+A 音频 | ⚙ 设置",
+        self.status_label = tk.Label(status_bar, text="就绪  ·  Ctrl+Enter 翻译  ·  Ctrl+Shift+S 屏幕  ·  Ctrl+Shift+A 音频",
                                     font=("Microsoft YaHei", 8),
                                     bg=Theme.BG, fg=Theme.TEXT_HINT)
         self.status_label.pack(side=tk.LEFT)
-
-        # 剪贴板监控开关
-        self.monitor_toggle_btn = tk.Label(status_bar, text="⏸ 暂停监控",
-                                          font=("Microsoft YaHei", 8),
-                                          bg=Theme.BG, fg=Theme.PRIMARY,
-                                          cursor="hand2")
-        self.monitor_toggle_btn.pack(side=tk.RIGHT, padx=(0, 8))
-        self.monitor_toggle_btn.bind("<Button-1>", lambda e: self._toggle_monitoring())
 
         # 划词翻译开关
         self.selected_toggle_btn = tk.Label(status_bar, text="📝 划词翻译: 开",
@@ -459,6 +471,19 @@ class TranslatorApp:
                                            cursor="hand2")
         self.selected_toggle_btn.pack(side=tk.RIGHT, padx=(0, 8))
         self.selected_toggle_btn.bind("<Button-1>", lambda e: self._toggle_selected_translate())
+
+    def _configure_ttk_style(self):
+        """统一原生下拉框的字体、间距和主题色。"""
+        style = ttk.Style(self.root)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+        style.configure("TCombobox", padding=6, relief="flat",
+                        fieldbackground=Theme.CARD_BG, background=Theme.CARD_BG,
+                        foreground=Theme.TEXT, bordercolor=Theme.BORDER,
+                        lightcolor=Theme.BORDER, darkcolor=Theme.BORDER,
+                        arrowcolor=Theme.TEXT_SEC)
 
     def _make_small_btn(self, parent, text, command):
         """创建小型操作按钮"""
@@ -526,12 +551,11 @@ class TranslatorApp:
         """剪贴板监控循环（后台线程）"""
         import pyperclip
         while not self._closing:
-            # Event 暂停/恢复：暂停时 wait 超时后继续循环检查
-            self._monitor_event.wait(timeout=CHECK_CLIPBOARD_INTERVAL)
+            # 关闭时阻塞等待，开启后按固定间隔轮询，避免 Event 已设置时空转占满 CPU。
+            if not self._monitor_event.wait(timeout=CHECK_CLIPBOARD_INTERVAL):
+                continue
             if self._closing:
                 break
-            if not self._monitor_event.is_set():
-                continue
             try:
                 current = pyperclip.paste() or ""
                 if current and current != self.last_clipboard_text and len(current.strip()) >= 2:
@@ -540,6 +564,7 @@ class TranslatorApp:
                     self.task_queue.put(("clipboard", current.strip()))
             except Exception as e:
                 logger.error(f"剪贴板监控错误: {e}")
+            time.sleep(CHECK_CLIPBOARD_INTERVAL)
 
     def _safe_after(self, fn):
         """主线程回调投递：窗口关闭后静默丢弃，避免 TclError"""
@@ -575,7 +600,7 @@ class TranslatorApp:
 
     def _handle_clipboard_change(self, text):
         """处理剪贴板变化 — 跨软件划词翻译（支持任意长度文本，自动分块翻译）"""
-        if not text or len(text) < 2:
+        if not self.monitoring or not text or len(text) < 2:
             return
         # 不再限制长度，由翻译引擎自动分块处理
         # 显示时截断预览（浮窗空间有限，但完整翻译）
@@ -1045,15 +1070,25 @@ class TranslatorApp:
         """切换剪贴板监控（常驻线程 + Event 暂停/恢复，无线程叠加）"""
         self.monitoring = not self.monitoring
         if self.monitoring:
-            self.monitor_indicator.configure(text="🟢 剪贴板监控中", fg=Theme.SUCCESS)
-            self.monitor_toggle_btn.configure(text="⏸ 暂停监控")
+            # 忽略开启前已有的剪贴板内容，只响应之后的新复制。
+            try:
+                import pyperclip
+                self.last_clipboard_text = pyperclip.paste() or ""
+            except Exception:
+                pass
+            self.monitor_indicator.configure(text="复制文字后自动翻译", fg=Theme.SUCCESS)
+            self.monitor_toggle_btn.configure(text="●  粘贴自动翻译", bg=Theme.PRIMARY_BG,
+                                              fg=Theme.PRIMARY)
             self._monitor_event.set()
-            self.status_label.configure(text="🟢 剪贴板监控已开启")
+            self.status_label.configure(text="粘贴自动翻译已开启")
         else:
-            self.monitor_indicator.configure(text="🔴 监控已暂停", fg=Theme.ACCENT)
-            self.monitor_toggle_btn.configure(text="▶ 开启监控")
             self._monitor_event.clear()
-            self.status_label.configure(text="🔴 剪贴板监控已暂停")
+            self._translate_seq += 1
+            self.float_popup.hide_popup()
+            self.monitor_indicator.configure(text="粘贴翻译已关闭", fg=Theme.TEXT_HINT)
+            self.monitor_toggle_btn.configure(text="○  粘贴自动翻译", bg=Theme.BG,
+                                              fg=Theme.TEXT_SEC)
+            self.status_label.configure(text="粘贴自动翻译已关闭，不会读取剪贴板")
 
     def _toggle_selected_translate(self):
         """切换划词翻译"""
@@ -1081,6 +1116,7 @@ class TranslatorApp:
 
         # 递归更新所有子控件的颜色
         self._apply_theme_to_widget(self.root)
+        self._configure_ttk_style()
 
         # 如果浮动弹窗已创建，也更新其主题
         if hasattr(self, 'float_popup') and self.float_popup and self.float_popup.winfo_exists():
@@ -1097,15 +1133,15 @@ class TranslatorApp:
         try:
             if widget_class in ("Frame", "Labelframe", "Tk", "Toplevel"):
                 bg = widget.cget("bg")
-                if bg in ("#f5f6f8", "#ffffff", "#e0e3e8",
-                          "#1e1e2a", "#282836", "#3d3d50"):
-                    widget.configure(bg=Theme.get("BG" if bg in ("#f5f6f8", "#1e1e2a") else
-                                                  "CARD_BG" if bg in ("#ffffff", "#282836") else
+                if bg in ("#f3f6fb", "#ffffff", "#dbe3ef",
+                          "#111827", "#1f2937", "#344155"):
+                    widget.configure(bg=Theme.get("BG" if bg in ("#f3f6fb", "#111827") else
+                                                  "CARD_BG" if bg in ("#ffffff", "#1f2937") else
                                                   "BORDER"))
                 # 更新 highlightbackground
                 try:
                     hb = widget.cget("highlightbackground")
-                    if hb in ("#e0e3e8", "#3d3d50"):
+                    if hb in ("#dbe3ef", "#344155"):
                         widget.configure(highlightbackground=Theme.get("BORDER"))
                 except Exception:
                     pass
@@ -1114,38 +1150,38 @@ class TranslatorApp:
                 fg = widget.cget("fg")
                 bg = widget.cget("bg")
                 # 更新背景
-                if bg in ("#f5f6f8", "#ffffff", "#e0e3e8",
-                          "#1e1e2a", "#282836", "#3d3d50"):
-                    widget.configure(bg=Theme.get("BG" if bg in ("#f5f6f8", "#1e1e2a") else
-                                                  "CARD_BG" if bg in ("#ffffff", "#282836") else
+                if bg in ("#f3f6fb", "#ffffff", "#dbe3ef",
+                          "#111827", "#1f2937", "#344155"):
+                    widget.configure(bg=Theme.get("BG" if bg in ("#f3f6fb", "#111827") else
+                                                  "CARD_BG" if bg in ("#ffffff", "#1f2937") else
                                                   "BORDER"))
                 # 更新前景色
-                if fg in ("#202124", "#5f6368", "#9aa0a6", "#1a73e8",
-                          "#e8e8f0", "#b0b0c0", "#707080", "#8ab4f8"):
+                if fg in ("#172033", "#5b6880", "#8b97aa", "#5267df",
+                          "#f4f7fb", "#bdc7d8", "#8290a7", "#9aa8ff"):
                     color_map = {
-                        "#202124": "TEXT", "#e8e8f0": "TEXT",
-                        "#5f6368": "TEXT_SEC", "#b0b0c0": "TEXT_SEC",
-                        "#9aa0a6": "TEXT_HINT", "#707080": "TEXT_HINT",
-                        "#1a73e8": "PRIMARY", "#8ab4f8": "PRIMARY",
+                        "#172033": "TEXT", "#f4f7fb": "TEXT",
+                        "#5b6880": "TEXT_SEC", "#bdc7d8": "TEXT_SEC",
+                        "#8b97aa": "TEXT_HINT", "#8290a7": "TEXT_HINT",
+                        "#5267df": "PRIMARY", "#9aa8ff": "PRIMARY",
                     }
                     widget.configure(fg=Theme.get(color_map.get(fg, "TEXT")))
 
             elif widget_class == "Text":
                 bg = widget.cget("bg")
                 fg = widget.cget("fg")
-                if bg in ("#ffffff", "#282836"):
+                if bg in ("#ffffff", "#1f2937"):
                     widget.configure(bg=Theme.get("CARD_BG"))
-                if fg in ("#202124", "#e8e8f0", "#9aa0a6"):
-                    widget.configure(fg=Theme.get("TEXT" if fg in ("#202124", "#e8e8f0") else "TEXT_HINT"))
+                if fg in ("#172033", "#f4f7fb", "#8b97aa", "#8290a7"):
+                    widget.configure(fg=Theme.get("TEXT" if fg in ("#172033", "#f4f7fb") else "TEXT_HINT"))
                 widget.configure(selectbackground=Theme.get("PRIMARY_BG"),
                                  insertbackground=Theme.get("PRIMARY"))
 
             elif widget_class == "Scrollbar":
                 bg = widget.cget("bg")
                 trough = widget.cget("troughcolor")
-                if bg in ("#f5f6f8", "#1e1e2a"):
+                if bg in ("#f3f6fb", "#111827"):
                     widget.configure(bg=Theme.get("BG"))
-                if trough in ("#ffffff", "#282836"):
+                if trough in ("#ffffff", "#1f2937"):
                     widget.configure(troughcolor=Theme.get("CARD_BG"))
 
         except Exception:

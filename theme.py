@@ -10,29 +10,29 @@ class Theme:
 
     # ==================== 亮色主题 ====================
     # 基础色
-    BG = "#f5f6f8"
+    BG = "#f3f6fb"
     CARD_BG = "#ffffff"
-    BORDER = "#e0e3e8"
-    TEXT = "#202124"
-    TEXT_SEC = "#5f6368"
-    TEXT_HINT = "#9aa0a6"
+    BORDER = "#dbe3ef"
+    TEXT = "#172033"
+    TEXT_SEC = "#5b6880"
+    TEXT_HINT = "#8b97aa"
 
     # 功能色
-    PRIMARY = "#1a73e8"
-    PRIMARY_BG = "#e8f0fe"
+    PRIMARY = "#5267df"
+    PRIMARY_BG = "#edf0ff"
     ACCENT = "#ea4335"
     ACCENT_BG = "#fce8e6"
-    SUCCESS = "#34a853"
+    SUCCESS = "#16a085"
 
     # ==================== 暗色主题 ====================
-    DARK_BG = "#1e1e2a"
-    DARK_CARD_BG = "#282836"
-    DARK_BORDER = "#3d3d50"
-    DARK_TEXT = "#e8e8f0"
-    DARK_TEXT_SEC = "#b0b0c0"
-    DARK_TEXT_HINT = "#707080"
-    DARK_PRIMARY = "#8ab4f8"
-    DARK_PRIMARY_BG = "#1e2a3a"
+    DARK_BG = "#111827"
+    DARK_CARD_BG = "#1f2937"
+    DARK_BORDER = "#344155"
+    DARK_TEXT = "#f4f7fb"
+    DARK_TEXT_SEC = "#bdc7d8"
+    DARK_TEXT_HINT = "#8290a7"
+    DARK_PRIMARY = "#9aa8ff"
+    DARK_PRIMARY_BG = "#293252"
 
     # ==================== 当前主题状态 ====================
     _is_dark = False

@@ -22,8 +22,8 @@ FLOAT_POPUP_WIDTH = 380
 FLOAT_POPUP_HEIGHT = 220
 
 # ==================== 主窗口 ====================
-MAIN_WIN_WIDTH = 820
-MAIN_WIN_HEIGHT = 620
+MAIN_WIN_WIDTH = 980
+MAIN_WIN_HEIGHT = 740
 
 # ==================== 翻译引擎元数据（设置对话框渲染用） ====================
 ENGINE_INFO = {
