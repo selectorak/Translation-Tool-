@@ -48,6 +48,7 @@ from config import (
     MAIN_WIN_WIDTH, MAIN_WIN_HEIGHT,
 )
 from ui_components import FloatPopup, SettingsDialog
+from hotkey import GlobalHotkeyManager
 
 # =========================== 屏幕翻译模块（懒加载） ===========================
 _screen_translator = None
@@ -168,6 +169,10 @@ class TranslatorApp:
         # 构建界面
         self._build_ui()
         self._bind_events()
+
+        # 粘贴翻译全局快捷键（与剪贴板自动监控共存）
+        self.hotkey_mgr = None
+        self._apply_paste_hotkey()
 
         # 初始化剪贴板
         try:
@@ -397,8 +402,15 @@ class TranslatorApp:
         self.input_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         input_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
-        # 输入框占位符
-        self._add_placeholder(self.input_text, "在此输入或粘贴需要翻译的内容…\n\n快捷方式\n  Ctrl + Enter  开始翻译\n  Ctrl + Shift + S  屏幕取词\n  Ctrl + Shift + A  音频翻译\n\n需要复制后自动翻译时，请开启顶部的「粘贴自动翻译」。")
+        # 输入框占位符（含当前粘贴翻译快捷键提示）
+        paste_hotkey = str(load_config().get("paste_hotkey") or "").strip() or "Pause"
+        self._add_placeholder(self.input_text,
+                              "在此输入或粘贴需要翻译的内容…\n\n快捷方式\n"
+                              "  Ctrl + Enter  开始翻译\n"
+                              "  Ctrl + Shift + S  屏幕取词\n"
+                              "  Ctrl + Shift + A  音频翻译\n"
+                              f"  {paste_hotkey}  翻译剪贴板内容（全局快捷键，可在设置中修改）\n\n"
+                              "需要复制后自动翻译时，请开启顶部的「粘贴自动翻译」。")
 
         # 输入框底部按钮
         input_actions = tk.Frame(input_frame, bg=Theme.CARD_BG, height=34)
@@ -459,7 +471,8 @@ class TranslatorApp:
         status_bar.pack(fill=tk.X, padx=22, pady=(0, 12))
         status_bar.pack_propagate(False)
 
-        self.status_label = tk.Label(status_bar, text="就绪  ·  Ctrl+Enter 翻译  ·  Ctrl+Shift+S 屏幕  ·  Ctrl+Shift+A 音频",
+        self.status_label = tk.Label(status_bar,
+                                    text=f"就绪  ·  Ctrl+Enter 翻译  ·  Ctrl+Shift+S 屏幕  ·  Ctrl+Shift+A 音频  ·  {paste_hotkey} 粘贴翻译",
                                     font=("Microsoft YaHei", 8),
                                     bg=Theme.BG, fg=Theme.TEXT_HINT)
         self.status_label.pack(side=tk.LEFT)
@@ -566,6 +579,42 @@ class TranslatorApp:
                 logger.error(f"剪贴板监控错误: {e}")
             time.sleep(CHECK_CLIPBOARD_INTERVAL)
 
+    # ==================== 粘贴翻译快捷键 ====================
+
+    def _apply_paste_hotkey(self):
+        """按配置注册/更新粘贴翻译全局快捷键（配置留空表示禁用）"""
+        combo = str(load_config().get("paste_hotkey") or "").strip()
+        if self.hotkey_mgr is None:
+            self.hotkey_mgr = GlobalHotkeyManager()
+        if not combo:
+            self.hotkey_mgr.stop()
+            logger.info("粘贴翻译快捷键未配置，已禁用")
+            return
+        ok, err = self.hotkey_mgr.start(combo, self._on_paste_hotkey)
+        if ok:
+            logger.info(f"粘贴翻译快捷键已注册: {combo}")
+            self.status_label.configure(text=f"⌨ 粘贴翻译快捷键已启用: {combo}")
+        else:
+            logger.warning(f"粘贴翻译快捷键{err}")
+            self.status_label.configure(text=f"⌨ 粘贴翻译快捷键{err}")
+
+    def _on_paste_hotkey(self):
+        """热键回调（热键线程执行）→ 投递到任务队列，由主线程处理"""
+        self.task_queue.put(("hotkey_paste", None))
+
+    def _handle_paste_hotkey(self):
+        """主线程处理：读取剪贴板并强制翻译（绕过自动监控开关）"""
+        try:
+            import pyperclip
+            text = (pyperclip.paste() or "").strip()
+        except Exception as e:
+            logger.error(f"读取剪贴板失败: {e}")
+            text = ""
+        if len(text) < 2:
+            self.status_label.configure(text="剪贴板没有可翻译的文字")
+            return
+        self._handle_clipboard_change(text, force=True)
+
     def _safe_after(self, fn):
         """主线程回调投递：窗口关闭后静默丢弃，避免 TclError"""
         if self._closing:
@@ -593,14 +642,21 @@ class TranslatorApp:
                     self._handle_clipboard_change(data)
                 elif task_type == "selection":
                     self._handle_selection_translate(data)
+                elif task_type == "hotkey_paste":
+                    self._handle_paste_hotkey()
         except queue.Empty:
             pass
         finally:
             self.root.after(TASK_QUEUE_POLL_MS, self._process_queue)
 
-    def _handle_clipboard_change(self, text):
-        """处理剪贴板变化 — 跨软件划词翻译（支持任意长度文本，自动分块翻译）"""
-        if not self.monitoring or not text or len(text) < 2:
+    def _handle_clipboard_change(self, text, force: bool = False):
+        """处理剪贴板翻译 — 跨软件划词翻译（支持任意长度文本，自动分块翻译）
+
+        force=True 时绕过自动监控开关（粘贴翻译快捷键触发）。
+        """
+        if not text or len(text) < 2:
+            return
+        if not force and not self.monitoring:
             return
         # 不再限制长度，由翻译引擎自动分块处理
         # 显示时截断预览（浮窗空间有限，但完整翻译）
@@ -1275,9 +1331,11 @@ class TranslatorApp:
         pass  # 状态栏在初始化时已设置，此处预留
 
     def _open_settings(self):
-        """打开API密钥设置对话框"""
-        SettingsDialog(self.root)
+        """打开API密钥设置对话框（模态等待，关闭后刷新引擎与快捷键）"""
+        dialog = SettingsDialog(self.root)
+        self.root.wait_window(dialog)
         self._refresh_engine_list()
+        self._apply_paste_hotkey()
 
     def _on_popup_closed(self):
         """浮动弹窗关闭回调"""
@@ -1293,6 +1351,13 @@ class TranslatorApp:
         # 停止剪贴板监控（常驻线程通过标志退出）
         self.monitoring = False
         self._monitor_event.set()
+
+        # 注销全局热键
+        if self.hotkey_mgr is not None:
+            try:
+                self.hotkey_mgr.stop()
+            except Exception:
+                pass
 
         # 停止音频翻译（stop() 已改为非阻塞，直接调用即可）
         global _audio_translator

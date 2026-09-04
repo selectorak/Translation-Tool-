@@ -76,6 +76,7 @@ DEFAULT_CONFIG = {
         "microsoft": {"subscription_key": "", "region": "eastasia"},
     },
     "max_chunk_size": 5000,  # 单次请求最大字符数（自动分块）
+    "paste_hotkey": "Pause",  # 粘贴翻译全局快捷键（如 Pause / Ctrl+Alt+T，留空禁用）
 }
 
 

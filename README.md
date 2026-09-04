@@ -20,6 +20,7 @@ D:\人工智能\翻译软件\
 ├── theme.py                ← 亮色/暗色双主题配色方案
 ├── ui_components.py        ← UI 组件（FloatPopup 弹窗、SettingsDialog 设置框）
 ├── translate_engines.py    ← 翻译引擎管理器（8大引擎 + 自动回退 + 重试机制）
+├── hotkey.py               ← 全局热键模块（Win32 RegisterHotKey，无第三方依赖）
 ├── screen_translator.py    ← 屏幕区域翻译模块（OpenCV + OCR + 语义分析）
 ├── audio_translator.py     ← 音频翻译模块（WASAPI 捕获 + faster-whisper + 翻译）
 ├── check_deps.py           ← 依赖诊断工具（独立运行检查所有依赖）
@@ -459,6 +460,7 @@ D:\人工智能\翻译软件\
 | 整体翻译（快捷） | `Ctrl + Enter`                         | 同上                                                               |
 | 软件内划词       | 输入框内鼠标选中文字（≥2字符）         | 选中文 → 输出区显示                                                |
 | 跨软件翻译       | 任意软件 `Ctrl+C` 复制文字             | 浮窗弹出 + 主窗口同步                                              |
+| **粘贴翻译（快捷键）** | 任意软件按全局快捷键（默认 `Pause`，可在设置中修改） | 翻译当前剪贴板内容 → 浮窗 + 主窗口同步                              |
 | **屏幕翻译**     | 点击「🖥 屏幕翻译」按钮                | 主窗口+CMD自动隐藏 → 拖拽选区域 → OCR识别 → 语义分析 → 确认 → 翻译 |
 | 屏幕翻译（快捷） | `Ctrl + Shift + S`                     | 同上                                                               |
 | 屏幕翻译取消     | 区域选择按 `ESC` 或 确认框点「✕ 取消」 | 恢复主窗口 + CMD 窗口                                              |
@@ -808,4 +810,8 @@ def _toggle_theme(self):
 | Theme 类新增 get() / toggle() / set_dark()                   | 为后续一键暗色切换铺平接口，无需逐个修改颜色引用          |
 | config.py 独立管理所有配置常量                               | 避免散落在各文件中的 magic number，一处修改全局生效       |
 | 新增 requirements.txt                                        | 锁定依赖版本，避免因版本升级导致的兼容性问题              |
+| **粘贴翻译全局热键用 Win32 RegisterHotKey（2026-09）**        | 官方机制、零第三方依赖；keyboard 库的低层钩子易被杀软误报 |
+| 全局热键与剪贴板自动监控共存                                 | 自动监控适合连续阅读场景，快捷键适合按需翻译，两者用途不同 |
+| 快捷键触发走 force 参数绕过监控开关，复用同一翻译链路         | 避免复制粘贴两套翻译逻辑，缓存/去重/序号机制天然复用       |
+| 默认快捷键 Pause（可在设置修改，留空禁用）                   | Pause 几乎无软件占用（实测本机 Ctrl+Alt+T/Z 已被占用）    |
 | 新增 .gitignore                                              | 防止 api_keys.json 等敏感信息误提交到版本控制             |

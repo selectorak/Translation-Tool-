@@ -10,6 +10,7 @@ from tkinter import messagebox
 from theme import Theme
 from config import FLOAT_POPUP_WIDTH, ENGINE_INFO
 from translate_engines import load_config, save_config, reload_config
+from hotkey import parse_combo
 
 
 # =========================== 浮动翻译弹窗 ===========================
@@ -247,13 +248,27 @@ class SettingsDialog(tk.Toplevel):
                        bg=Theme.CARD_BG, activebackground=Theme.CARD_BG).pack(side=tk.RIGHT, padx=(0, 20))
 
         chunk_row = tk.Frame(adv_frame, bg=Theme.CARD_BG)
-        chunk_row.pack(fill=tk.X, padx=12, pady=(4, 8))
+        chunk_row.pack(fill=tk.X, padx=12, pady=(4, 0))
         tk.Label(chunk_row, text="单次最大字符数(自动分块):",
                  font=("Microsoft YaHei", 10),
                  bg=Theme.CARD_BG, fg=Theme.TEXT_SEC).pack(side=tk.LEFT)
         self.chunk_var = tk.StringVar(value=str(self.config.get("max_chunk_size", 5000)))
         tk.Entry(chunk_row, textvariable=self.chunk_var, width=8,
                  font=("Microsoft YaHei", 10), justify=tk.CENTER).pack(side=tk.RIGHT, padx=(0, 20))
+
+        # 粘贴翻译全局快捷键
+        hotkey_row = tk.Frame(adv_frame, bg=Theme.CARD_BG)
+        hotkey_row.pack(fill=tk.X, padx=12, pady=(4, 0))
+        tk.Label(hotkey_row, text="粘贴翻译快捷键(全局):",
+                 font=("Microsoft YaHei", 10),
+                 bg=Theme.CARD_BG, fg=Theme.TEXT_SEC).pack(side=tk.LEFT)
+        self.hotkey_var = tk.StringVar(value=str(self.config.get("paste_hotkey", "Pause")))
+        tk.Entry(hotkey_row, textvariable=self.hotkey_var, width=12,
+                 font=("Microsoft YaHei", 10), justify=tk.CENTER).pack(side=tk.RIGHT, padx=(0, 20))
+        tk.Label(adv_frame, text="格式如 Pause / Ctrl+Alt+T / Ctrl+Shift+F9，留空禁用；"
+                                 "在任意软件中按下即翻译剪贴板内容",
+                 font=("Microsoft YaHei", 8),
+                 bg=Theme.CARD_BG, fg=Theme.TEXT_HINT).pack(anchor=tk.W, padx=12, pady=(2, 8))
 
         # 底部按钮
         btn_frame = tk.Frame(self.scroll_frame, bg=Theme.CARD_BG)
@@ -330,6 +345,17 @@ class SettingsDialog(tk.Toplevel):
 
     def _save(self) -> None:
         """保存配置"""
+        # 快捷键格式校验（留空 = 禁用）
+        combo = self.hotkey_var.get().strip()
+        if combo and parse_combo(combo) is None:
+            messagebox.showwarning(
+                "快捷键无效",
+                f"无法识别快捷键「{combo}」。\n\n"
+                "支持格式如: Pause / Ctrl+Alt+T / Ctrl+Shift+F9",
+                parent=self,
+            )
+            return
+
         for engine_key in self.entries:
             if engine_key not in self.api_keys:
                 self.api_keys[engine_key] = {}
@@ -342,6 +368,7 @@ class SettingsDialog(tk.Toplevel):
             self.config["max_chunk_size"] = int(self.chunk_var.get())
         except ValueError:
             self.config["max_chunk_size"] = 5000
+        self.config["paste_hotkey"] = combo
 
         if save_config(self.config):
             reload_config()
