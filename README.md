@@ -686,10 +686,8 @@ pip install -r requirements-tts.txt
 #   安装时勾选中文语言包 (Chinese Simplified)
 #   支持自定义路径（自动检测 PATH、注册表及常见安装目录）
 
-# ★ GPU 加速（可选，RTX 显卡推荐）：
-#   安装 nvidia-cublas-cu12 获取 cublas64_12.dll
-pip install nvidia-cublas-cu12
-#   将 DLL 复制到 ctranslate2 目录
+# ★ GPU 加速（可选）：
+
 ```
 
 ### API 密钥配置
